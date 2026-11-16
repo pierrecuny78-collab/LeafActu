@@ -314,7 +314,7 @@ private fun LeafSwipeScreen() {
   else if (count == 0) Text("Aucune actualité disponible. Actualise pour réessayer.")
   else {
    Card(Modifier.fillMaxWidth().weight(1f).pointerInput(mode, index) { detectHorizontalDragGestures(onDragEnd = { if (drag < -65f) index = (index + 1).coerceAtMost(count - 1); if (drag > 65f) index = (index - 1).coerceAtLeast(0); drag = 0f }, onHorizontalDrag = { _, delta -> drag += delta }) }, shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-    if (mode == "Actualités" && article != null) { Column(Modifier.fillMaxSize()) { if (!article.imageUrl.isNullOrBlank()) AsyncImage(model = article.imageUrl, contentDescription = article.title, modifier = Modifier.fillMaxWidth().height(220.dp), contentScale = ContentScale.Crop); Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(article.category + " • " + article.source, color = LeafGreen, fontSize = 12.sp); Text(article.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(article.summary, color = LeafBrown, fontSize = 14.sp); Text(article.region + " • " + article.published, color = LeafBrown, fontSize = 11.sp); Button(onClick = { if (article.link.startsWith("http")) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.link))) }) { Text("Lire l’article") } } }
+    if (mode == "Actualités" && article != null) { Column(Modifier.fillMaxSize()) { if (!article.imageUrl.isNullOrBlank()) AsyncImage(model = article.imageUrl, contentDescription = article.title, modifier = Modifier.fillMaxWidth().height(220.dp), contentScale = ContentScale.Crop); Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(article.category + " • " + article.source, color = LeafGreen, fontSize = 12.sp); Text(article.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(article.summary, color = LeafBrown, fontSize = 14.sp); Text(article.region + " • " + article.published, color = LeafBrown, fontSize = 11.sp); OutlinedButton(onClick = { val p = context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE); val key = article.link.ifBlank { article.title }; val keys = p.getStringSet("favorites", emptySet())?.toMutableSet() ?: mutableSetOf(); keys.add(key); val saved = readSavedArticles(p.getString("saved_articles", "[]") ?: "[]").filterNot { it.link.ifBlank { it.title } == key } + article; p.edit().putStringSet("favorites", keys).putString("saved_articles", writeSavedArticles(saved)).apply() }) { Text("Garder") }; Button(onClick = { if (article.link.startsWith("http")) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.link))) }) { Text("Lire l’article") } } }
     } else { Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { Text(if (mode == "Le saviez-vous") "💡" else if (mode == "Motivation") "🌱" else "🎯", fontSize = 52.sp); Text(mode, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = LeafGreen); Text(prompts[safe], fontSize = 19.sp, color = LeafBrown) } }
    }
    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = { index = (index - 1).coerceAtLeast(0) }, enabled = index > 0) { Text("← Précédent") }; Text((safe + 1).toString() + " / " + count, color = LeafBrown); TextButton(onClick = { index = (index + 1).coerceAtMost(count - 1) }, enabled = index < count - 1) { Text("Suivant →") } }
@@ -396,6 +396,7 @@ private fun Personalization(categories: List<String>, regions: List<String>, cat
                     }
                 }
                 json.put("preferences", values)
+                json.put("savedArticles", JSONArray(context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE).getString("saved_articles", "[]") ?: "[]"))
                 context.contentResolver.openOutputStream(uri)?.use { it.write(json.toString(2).toByteArray(Charsets.UTF_8)) }
                     ?: error("Impossible d'écrire le fichier")
             }.onFailure { android.widget.Toast.makeText(context, "Export impossible : \${it.message}", android.widget.Toast.LENGTH_LONG).show() }
@@ -410,6 +411,7 @@ private fun Personalization(categories: List<String>, regions: List<String>, cat
                 val json = JSONObject(raw)
                 require(json.optString("format") == "leafactu-backup") { "Ce fichier n'est pas une sauvegarde LeafActu" }
                 val values = json.getJSONObject("preferences")
+                val savedArticlesJson = json.optJSONArray("savedArticles") ?: JSONArray()
                 val editor = context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE).edit().clear()
                 values.keys().forEach { key ->
                     when (val value = values.get(key)) {
@@ -421,6 +423,7 @@ private fun Personalization(categories: List<String>, regions: List<String>, cat
                         is Double -> editor.putFloat(key, value.toFloat())
                     }
                 }
+                editor.putString("saved_articles", savedArticlesJson.toString())
                 editor.apply()
             }.onFailure { android.widget.Toast.makeText(context, "Import impossible : \${it.message}", android.widget.Toast.LENGTH_LONG).show() }
              .onSuccess { android.widget.Toast.makeText(context, "Sauvegarde restaurée. Rouvre l'application pour actualiser les réglages.", android.widget.Toast.LENGTH_LONG).show() }
