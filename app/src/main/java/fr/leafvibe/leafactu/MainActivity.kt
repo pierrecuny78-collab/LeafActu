@@ -110,7 +110,7 @@ fun LeafActuApp() {
                         "Présent" -> Period.NOW
                         else -> null
                     }
-                    if (period == Period.NOW || period == null) LiveNewsFeed() else Feed(period, category, region)
+                    if (period == Period.NOW || period == null) LiveNewsFeed(category) else Feed(period, category, region)
                 }
             }
         }
@@ -163,9 +163,10 @@ private fun Feed(period: Period?, category: String, region: String) {
 
 
 @Composable
-private fun LiveNewsFeed() {
+private fun LiveNewsFeed(selectedCategory: String) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
+    val visibleArticles = articles.filter { selectedCategory == "Toutes" || it.category == selectedCategory }
     var loading by remember { mutableStateOf(true) }
     var refreshKey by remember { mutableIntStateOf(0) }
 
@@ -180,7 +181,7 @@ private fun LiveNewsFeed() {
             Column(Modifier.weight(1f)) {
                 Text("L'actualité en direct", fontSize = 23.sp, fontWeight = FontWeight.Bold,
                     color = LeafGreen, modifier = Modifier.padding(top = 12.dp))
-                Text("Flux RSS publics • ${articles.size} articles chargés",
+                Text("Flux RSS publics • ${visibleArticles.size} articles affichés",
                     color = LeafBrown, fontSize = 12.sp)
             }
             IconButton(onClick = { refreshKey++ }, enabled = !loading) {
@@ -198,7 +199,7 @@ private fun LiveNewsFeed() {
                 TextButton(onClick = { refreshKey++ }) { Text("Réessayer") }
             }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(articles) { article ->
+                items(visibleArticles) { article ->
                     Card(Modifier.fillMaxWidth().clickable {
                         if (article.link.startsWith("https://") || article.link.startsWith("http://")) {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.link)))
@@ -206,8 +207,12 @@ private fun LiveNewsFeed() {
                     }, shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Column(Modifier.padding(14.dp)) {
-                            Text(article.source.uppercase(), color = LeafGreen,
-                                fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(article.category.uppercase(), color = LeafGreen,
+                                    fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(8.dp))
+                                Text("• ${article.source}", color = LeafBrown, fontSize = 10.sp)
+                            }
                             Spacer(Modifier.height(5.dp))
                             Text(article.title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                             if (article.summary.isNotBlank()) {
