@@ -110,7 +110,7 @@ fun LeafActuApp() {
                         "Présent" -> Period.NOW
                         else -> null
                     }
-                    if (period == Period.NOW || period == null) LiveNewsFeed(category) else Feed(period, category, region)
+                    if (period == Period.NOW || period == null) LiveNewsFeed(category, region) else Feed(period, category, region)
                 }
             }
         }
@@ -163,10 +163,15 @@ private fun Feed(period: Period?, category: String, region: String) {
 
 
 @Composable
-private fun LiveNewsFeed(selectedCategory: String) {
+private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
-    val visibleArticles = articles.filter { selectedCategory == "Toutes" || it.category == selectedCategory }
+    var searchText by remember { mutableStateOf("") }
+    val visibleArticles = articles.filter {
+        (selectedCategory == "Toutes" || it.category == selectedCategory) &&
+        (selectedRegion == "Toutes" || it.region == selectedRegion || it.region == "Monde") &&
+        (searchText.isBlank() || it.title.contains(searchText, true) || it.summary.contains(searchText, true))
+    }
     var loading by remember { mutableStateOf(true) }
     var refreshKey by remember { mutableIntStateOf(0) }
 
@@ -181,13 +186,21 @@ private fun LiveNewsFeed(selectedCategory: String) {
             Column(Modifier.weight(1f)) {
                 Text("L'actualité en direct", fontSize = 23.sp, fontWeight = FontWeight.Bold,
                     color = LeafGreen, modifier = Modifier.padding(top = 12.dp))
-                Text("Flux RSS publics • ${visibleArticles.size} articles affichés",
+                Text("Flux RSS • ${visibleArticles.size} articles • Région : $selectedRegion",
                     color = LeafBrown, fontSize = 12.sp)
             }
             IconButton(onClick = { refreshKey++ }, enabled = !loading) {
                 Icon(Icons.Default.Refresh, contentDescription = "Actualiser", tint = LeafGreen)
             }
         }
+        OutlinedTextField(
+            value = searchText,
+            onValueChange = { searchText = it },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            singleLine = true,
+            label = { Text("Rechercher dans les actualités") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+        )
         when {
             loading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = LeafGreen)
@@ -211,7 +224,7 @@ private fun LiveNewsFeed(selectedCategory: String) {
                                 Text(article.category.uppercase(), color = LeafGreen,
                                     fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.width(8.dp))
-                                Text("• ${article.source}", color = LeafBrown, fontSize = 10.sp)
+                                Text("• ${article.source} • ${article.region}", color = LeafBrown, fontSize = 10.sp)
                             }
                             Spacer(Modifier.height(5.dp))
                             Text(article.title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
