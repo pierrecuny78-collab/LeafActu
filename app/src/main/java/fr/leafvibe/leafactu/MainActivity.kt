@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -86,12 +88,13 @@ fun LeafActuApp() {
                 Icon(Icons.Default.Tune, contentDescription = "Personnaliser")
             } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Page)) },
             bottomBar = { NavigationBar(containerColor = Color.White) {
-                listOf("Accueil", "Passé", "Présent", "Futur", "Enregistrés", "Explorer").forEach { name ->
+                listOf("Accueil", "Passé", "Présent", "Futur", "LeafSwipe", "Enregistrés", "Explorer").forEach { name ->
                     val icon = when (name) {
                         "Passé" -> Icons.Default.History
                         "Présent" -> Icons.Default.Feed
                         "Futur" -> Icons.Default.Event
                         "Enregistrés" -> Icons.Default.Bookmarks
+                        "LeafSwipe" -> Icons.Default.Swipe
                         "Explorer" -> Icons.Default.Explore
                         else -> Icons.Default.Home
                     }
@@ -106,6 +109,8 @@ fun LeafActuApp() {
                         { category = it; preferences.edit().putString("category", it).apply() },
                         { region = it; preferences.edit().putString("region", it).apply() },
                         { settings = false })
+                } else if (tab == "LeafSwipe") {
+                    LeafSwipeScreen()
                 } else if (tab == "Explorer") {
                     Explorer(categories, regions,
                         { category = it; preferences.edit().putString("category", it).apply(); tab = "Accueil" },
@@ -287,6 +292,33 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, saved
     }
 }
 
+@Composable
+private fun LeafSwipeScreen() {
+ val context = androidx.compose.ui.platform.LocalContext.current
+ var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
+ var loading by remember { mutableStateOf(true) }; var refresh by remember { mutableIntStateOf(0) }
+ var index by remember { mutableIntStateOf(0) }; var drag by remember { mutableFloatStateOf(0f) }
+ var mode by remember { mutableStateOf("Actualités") }
+ val modes = listOf("Actualités", "Le saviez-vous", "Motivation", "Défi du jour")
+ val prompts = listOf("Prends cinq minutes pour découvrir un sujet que tu ne connais pas.", "Note une information importante et vérifie-la auprès de deux sources.", "Partage une bonne nouvelle avec quelqu’un aujourd’hui.", "Découvre une initiative locale près de chez toi.", "Apprends une notion nouvelle et explique-la avec tes mots.")
+ LaunchedEffect(refresh) { loading = true; articles = runCatching { RssRepository.loadLatest() }.getOrDefault(emptyList()); index = 0; loading = false }
+ val count = if (mode == "Actualités") articles.size else prompts.size
+ val safe = if (count == 0) 0 else index.coerceIn(0, count - 1); val article = articles.getOrNull(safe)
+ Column(Modifier.fillMaxSize().padding(16.dp)) {
+  Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("LeafSwipe", fontSize = 25.sp, fontWeight = FontWeight.Bold, color = LeafGreen); Text("Découvre, apprends et passe à l’action", fontSize = 12.sp, color = LeafBrown) }; IconButton(onClick = { refresh++ }, enabled = !loading) { Icon(Icons.Default.Refresh, contentDescription = "Actualiser", tint = LeafGreen) } }
+  Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { modes.forEach { m -> FilterChip(selected = mode == m, onClick = { mode = m; index = 0 }, label = { Text(m, fontSize = 10.sp) }) } }
+  if (loading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = LeafGreen) }
+  else if (count == 0) Text("Aucune actualité disponible. Actualise pour réessayer.")
+  else {
+   Card(Modifier.fillMaxWidth().weight(1f).pointerInput(mode, index) { detectHorizontalDragGestures(onDragEnd = { if (drag < -65f) index = (index + 1).coerceAtMost(count - 1); if (drag > 65f) index = (index - 1).coerceAtLeast(0); drag = 0f }, onHorizontalDrag = { _, delta -> drag += delta }) }, shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    if (mode == "Actualités" && article != null) { Column(Modifier.fillMaxSize()) { if (!article.imageUrl.isNullOrBlank()) AsyncImage(model = article.imageUrl, contentDescription = article.title, modifier = Modifier.fillMaxWidth().height(220.dp), contentScale = ContentScale.Crop); Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(article.category + " • " + article.source, color = LeafGreen, fontSize = 12.sp); Text(article.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(article.summary, color = LeafBrown, fontSize = 14.sp); Text(article.region + " • " + article.published, color = LeafBrown, fontSize = 11.sp); Button(onClick = { if (article.link.startsWith("http")) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.link))) }) { Text("Lire l’article") } } }
+    } else { Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { Text(if (mode == "Le saviez-vous") "💡" else if (mode == "Motivation") "🌱" else "🎯", fontSize = 52.sp); Text(mode, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = LeafGreen); Text(prompts[safe], fontSize = 19.sp, color = LeafBrown) } }
+   }
+   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = { index = (index - 1).coerceAtLeast(0) }, enabled = index > 0) { Text("← Précédent") }; Text((safe + 1).toString() + " / " + count, color = LeafBrown); TextButton(onClick = { index = (index + 1).coerceAtMost(count - 1) }, enabled = index < count - 1) { Text("Suivant →") } }
+   Text("Balaye la carte vers la gauche ou la droite pour changer.", color = LeafBrown, fontSize = 11.sp)
+  }
+ }
+}
 @Composable
 private fun Explorer(categories: List<String>, regions: List<String>,
     onCategory: (String) -> Unit, onRegion: (String) -> Unit) {
