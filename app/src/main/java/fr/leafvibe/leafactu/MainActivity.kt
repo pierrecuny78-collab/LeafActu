@@ -175,9 +175,9 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, saved
     var cardLayout by remember { mutableStateOf(preferences.getString("layout", "cards") ?: "cards") }
     val visibleArticles = articles.filter { article ->
         (!savedOnly || (article.link.ifBlank { article.title }) in favorites) &&
-        (selectedCategory == "Toutes" || it.category == selectedCategory) &&
-        (selectedRegion == "Toutes" || it.region == selectedRegion || it.region == "Monde") &&
-        (searchText.isBlank() || it.title.contains(searchText, true) || it.summary.contains(searchText, true))
+        (selectedCategory == "Toutes" || article.category == selectedCategory) &&
+        (selectedRegion == "Toutes" || article.region == selectedRegion || article.region == "Monde") &&
+        (searchText.isBlank() || article.title.contains(searchText, true) || article.summary.contains(searchText, true))
     }
     var loading by remember { mutableStateOf(true) }
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -219,7 +219,7 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, saved
             loading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = LeafGreen)
             }
-            articles.isEmpty() -> Column(Modifier.padding(top = 24.dp)) {
+            visibleArticles.isEmpty() -> Column(Modifier.padding(top = 24.dp)) {
                 Text(if (savedOnly) "Aucun article enregistré." else "Aucun article récupéré pour le moment.", fontWeight = FontWeight.Bold)
                 Text(if (savedOnly) "Enregistre un article avec le marque-page pour le retrouver ici." else "Vérifie ta connexion Internet ou réessaie plus tard. Certains flux peuvent être indisponibles.",
                     color = LeafBrown, fontSize = 13.sp)
