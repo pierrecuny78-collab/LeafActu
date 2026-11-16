@@ -6,6 +6,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +25,8 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.json.JSONArray
+import org.json.JSONObject
 
 private val LeafGreen = Color(0xFF206B4D)
 private val LeafBrown = Color(0xFF6B4935)
@@ -329,5 +333,69 @@ private fun Personalization(categories: List<String>, regions: List<String>, cat
         }
         Text("Tes préférences sont enregistrées sur cet appareil.",
             fontSize = 12.sp, color = LeafBrown, modifier = Modifier.padding(top = 10.dp))
+        HorizontalDivider(Modifier.padding(vertical = 14.dp))
+        Text("Sauvegarde et transfert", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = LeafGreen)
+        Text("Exporte tes réglages et favoris dans un fichier JSON, ou restaure-les sur cet appareil.",
+            fontSize = 12.sp, color = LeafBrown)
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val exportLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("application/json")
+        ) { uri ->
+            if (uri != null) runCatching {
+                val json = JSONObject()
+                json.put("format", "leafactu-backup")
+                json.put("version", 1)
+                json.put("exportedAt", System.currentTimeMillis())
+                val values = JSONObject()
+                context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE).all.forEach { (key, value) ->
+                    when (value) {
+                        is Set<*> -> values.put(key, JSONArray(value.toList()))
+                        is String -> values.put(key, value)
+                        is Boolean -> values.put(key, value)
+                        is Int -> values.put(key, value)
+                        is Long -> values.put(key, value)
+                        is Float -> values.put(key, value.toDouble())
+                    }
+                }
+                json.put("preferences", values)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(json.toString(2).toByteArray(Charsets.UTF_8)) }
+                    ?: error("Impossible d'écrire le fichier")
+            }.onFailure { android.widget.Toast.makeText(context, "Export impossible : \${it.message}", android.widget.Toast.LENGTH_LONG).show() }
+             .onSuccess { android.widget.Toast.makeText(context, "Sauvegarde JSON exportée", android.widget.Toast.LENGTH_LONG).show() }
+        }
+        val importLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri ->
+            if (uri != null) runCatching {
+                val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("Impossible de lire le fichier")
+                val json = JSONObject(raw)
+                require(json.optString("format") == "leafactu-backup") { "Ce fichier n'est pas une sauvegarde LeafActu" }
+                val values = json.getJSONObject("preferences")
+                val editor = context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE).edit().clear()
+                values.keys().forEach { key ->
+                    when (val value = values.get(key)) {
+                        is JSONArray -> editor.putStringSet(key, (0 until value.length()).map { value.getString(it) }.toSet())
+                        is String -> editor.putString(key, value)
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is Double -> editor.putFloat(key, value.toFloat())
+                    }
+                }
+                editor.apply()
+            }.onFailure { android.widget.Toast.makeText(context, "Import impossible : \${it.message}", android.widget.Toast.LENGTH_LONG).show() }
+             .onSuccess { android.widget.Toast.makeText(context, "Sauvegarde restaurée. Rouvre l'application pour actualiser les réglages.", android.widget.Toast.LENGTH_LONG).show() }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { exportLauncher.launch("LeafActu_backup.json") }, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.FileDownload, contentDescription = null)
+                Spacer(Modifier.width(6.dp)); Text("Exporter JSON")
+            }
+            OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/*")) }, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.FileUpload, contentDescription = null)
+                Spacer(Modifier.width(6.dp)); Text("Importer JSON")
+            }
+        }
     }
 }
