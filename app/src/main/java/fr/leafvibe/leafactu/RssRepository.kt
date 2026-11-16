@@ -2,7 +2,11 @@ package fr.leafvibe.leafactu
 
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.xmlpull.v1.XmlPullParser
 import java.net.HttpURLConnection
 import java.net.URL
@@ -42,11 +46,17 @@ object RssRepository {
     )
 
     suspend fun loadLatest(): List<LiveArticle> = withContext(Dispatchers.IO) {
-        sources.flatMap { source ->
-            runCatching { parseFeed(source) }.getOrElse { emptyList() }
+        coroutineScope {
+            sources.map { source ->
+                async {
+                    withTimeoutOrNull(9000L) {
+                        runCatching { parseFeed(source) }.getOrElse { emptyList() }
+                    } ?: emptyList()
+                }
+            }.awaitAll().flatten()
         }.distinctBy { it.link.ifBlank { it.title } }
             .sortedByDescending { it.published }
-            .take(60)
+            .take(100)
     }
 
     private fun extractImage(html: String): String? {
