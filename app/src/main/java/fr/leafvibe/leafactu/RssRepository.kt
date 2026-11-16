@@ -14,7 +14,8 @@ data class LiveArticle(
     val published: String,
     val source: String,
     val category: String,
-    val region: String
+    val region: String,
+    val imageUrl: String? = null
 )
 
 object RssRepository {
@@ -26,7 +27,18 @@ object RssRepository {
         FeedSource("Franceinfo", "https://www.francetvinfo.fr/titres.rss"),
         FeedSource("RFI", "https://www.rfi.fr/fr/rss"),
         FeedSource("Le Monde", "https://www.lemonde.fr/rss/une.xml"),
-        FeedSource("BBC News - World", "https://feeds.bbci.co.uk/news/world/rss.xml")
+        FeedSource("BBC News - World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
+        FeedSource("The Guardian - World", "https://www.theguardian.com/world/rss"),
+        FeedSource("Euronews", "https://www.euronews.com/rss?format=mrss&level=theme&name=news"),
+        FeedSource("Les Échos", "https://www.lesechos.fr/rss/rss_une.xml"),
+        FeedSource("Libération", "https://www.liberation.fr/arc/outboundfeeds/rss-all/?outputType=xml"),
+        FeedSource("Le Figaro", "https://www.lefigaro.fr/rss/figaro_actualites.xml"),
+        FeedSource("Numerama", "https://www.numerama.com/feed/"),
+        FeedSource("01net", "https://www.01net.com/rss/actualites/"),
+        FeedSource("Futura", "https://www.futura-sciences.com/rss/actualites.xml"),
+        FeedSource("NASA", "https://www.nasa.gov/news-release/feed/"),
+        FeedSource("ScienceDaily", "https://www.sciencedaily.com/rss/all.xml"),
+        FeedSource("ESPN", "https://www.espn.com/espn/rss/news")
     )
 
     suspend fun loadLatest(): List<LiveArticle> = withContext(Dispatchers.IO) {
@@ -35,6 +47,11 @@ object RssRepository {
         }.distinctBy { it.link.ifBlank { it.title } }
             .sortedByDescending { it.published }
             .take(60)
+    }
+
+    private fun extractImage(html: String): String? {
+        val match = Regex("""<img[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE).find(html) ?: return null
+        return match.groupValues.getOrNull(1)?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
     }
 
     private fun classifyCategory(title: String, summary: String): String {
@@ -87,6 +104,7 @@ object RssRepository {
                 var summary = ""
                 var link = ""
                 var published = ""
+                var imageUrl: String? = null
 
                 while (event != XmlPullParser.END_DOCUMENT) {
                     when (event) {
@@ -94,14 +112,22 @@ object RssRepository {
                             when (parser.name.lowercase()) {
                                 "item", "entry" -> {
                                     inEntry = true
-                                    title = ""; summary = ""; link = ""; published = ""
+                                    title = ""; summary = ""; link = ""; published = ""; imageUrl = null
                                 }
                                 "title" -> if (inEntry) title = parser.nextText().trim()
                                 "description", "summary", "content" ->
                                     if (inEntry && summary.isBlank()) summary = parser.nextText().trim()
                                 "link" -> if (inEntry) {
                                     val href = parser.getAttributeValue(null, "href")
-                                    link = (href ?: parser.nextText()).trim()
+                                    val rel = parser.getAttributeValue(null, "rel")
+                                    if (!href.isNullOrBlank()) {
+                                        if (rel == "enclosure" && imageUrl == null) imageUrl = href
+                                        else if (link.isBlank() && (rel == null || rel == "alternate")) link = href
+                                    } else link = parser.nextText().trim()
+                                }
+                                "enclosure", "media:thumbnail", "media:content", "thumbnail" -> if (inEntry && imageUrl == null) {
+                                    val candidate = parser.getAttributeValue(null, "url")
+                                    if (!candidate.isNullOrBlank()) imageUrl = candidate
                                 }
                                 "pubdate", "published", "updated" ->
                                     if (inEntry) published = parser.nextText().trim()
@@ -117,7 +143,8 @@ object RssRepository {
                                         published = published,
                                         source = source.name,
                                         category = classifyCategory(title, summary),
-                                        region = classifyRegion(title, summary)
+                                        region = classifyRegion(title, summary),
+                                        imageUrl = imageUrl ?: extractImage(summary)
                                     ))
                                 }
                                 inEntry = false
