@@ -166,6 +166,8 @@ private fun Feed(period: Period?, category: String, region: String) {
 private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
+    val preferences = remember { context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE) }
+    var favorites by remember { mutableStateOf(preferences.getStringSet("favorites", emptySet())?.toSet() ?: emptySet()) }
     var searchText by remember { mutableStateOf("") }
     val visibleArticles = articles.filter {
         (selectedCategory == "Toutes" || it.category == selectedCategory) &&
@@ -224,7 +226,20 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String) {
                                 Text(article.category.uppercase(), color = LeafGreen,
                                     fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.width(8.dp))
-                                Text("• ${article.source} • ${article.region}", color = LeafBrown, fontSize = 10.sp)
+                                Text("• ${article.source} • ${article.region}", color = LeafBrown, fontSize = 10.sp,
+                                    modifier = Modifier.weight(1f))
+                                IconButton(onClick = {
+                                    val key = article.link.ifBlank { article.title }
+                                    favorites = if (key in favorites) favorites - key else favorites + key
+                                    preferences.edit().putStringSet("favorites", favorites).apply()
+                                }) {
+                                    Icon(
+                                        if ((article.link.ifBlank { article.title }) in favorites)
+                                            Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                        contentDescription = "Ajouter ou retirer des favoris",
+                                        tint = LeafGreen
+                                    )
+                                }
                             }
                             Spacer(Modifier.height(5.dp))
                             Text(article.title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
