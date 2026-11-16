@@ -23,7 +23,10 @@ object RssRepository {
     // Première sélection de flux publics ; chaque flux reste identifiable.
     private val sources = listOf(
         FeedSource("France 24", "https://www.france24.com/fr/rss"),
-        FeedSource("Franceinfo", "https://www.francetvinfo.fr/titres.rss")
+        FeedSource("Franceinfo", "https://www.francetvinfo.fr/titres.rss"),
+        FeedSource("RFI", "https://www.rfi.fr/fr/rss"),
+        FeedSource("Le Monde", "https://www.lemonde.fr/rss/une.xml"),
+        FeedSource("BBC News - World", "https://feeds.bbci.co.uk/news/world/rss.xml")
     )
 
     suspend fun loadLatest(): List<LiveArticle> = withContext(Dispatchers.IO) {
