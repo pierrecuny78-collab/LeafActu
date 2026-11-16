@@ -13,7 +13,8 @@ data class LiveArticle(
     val link: String,
     val published: String,
     val source: String,
-    val category: String
+    val category: String,
+    val region: String
 )
 
 object RssRepository {
@@ -45,6 +46,20 @@ object RssRepository {
             "Politique" to listOf("gouvernement", "président", "élection", "parlement", "ministre", "politique", "diplomatie")
         )
         return rules.firstOrNull { (_, keywords) -> keywords.any(text::contains) }?.first ?: "Monde"
+    }
+
+    private fun classifyRegion(title: String, summary: String): String {
+        val text = "$title $summary".lowercase()
+        return when {
+            listOf("alsace", "strasbourg", "colmar", "mulhouse", "bas-rhin", "haut-rhin").any(text::contains) -> "Alsace"
+            listOf("france", "paris", "lyon", "marseille", "bordeaux", "toulouse", "lille").any(text::contains) -> "France"
+            listOf("allemagne", "berlin", "munich", "hambourg").any(text::contains) -> "Allemagne"
+            listOf("europe", "bruxelles", "union européenne").any(text::contains) -> "Europe"
+            listOf("états-unis", "washington", "new york", "amérique").any(text::contains) -> "Amérique"
+            listOf("chine", "japon", "inde", "asie", "corée").any(text::contains) -> "Asie"
+            listOf("afrique", "nigeria", "kenya", "sénégal", "maroc").any(text::contains) -> "Afrique"
+            else -> "Monde"
+        }
     }
 
     private fun parseFeed(source: FeedSource): List<LiveArticle> {
@@ -98,7 +113,8 @@ object RssRepository {
                                         link = link,
                                         published = published,
                                         source = source.name,
-                                        category = classifyCategory(title, summary)
+                                        category = classifyCategory(title, summary),
+                                        region = classifyRegion(title, summary)
                                     ))
                                 }
                                 inEntry = false
