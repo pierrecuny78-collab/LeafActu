@@ -75,7 +75,7 @@ object RssRepository {
         }
 
         try {
-            connection.inputStream.use { input ->
+            return connection.inputStream.use { input ->
                 val parser = Xml.newPullParser()
                 parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
                 parser.setInput(input, null)
