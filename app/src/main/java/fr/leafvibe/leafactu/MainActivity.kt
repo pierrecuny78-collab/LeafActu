@@ -180,9 +180,11 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, saved
     var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
     val preferences = remember { context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE) }
     var favorites by remember { mutableStateOf(preferences.getStringSet("favorites", emptySet())?.toSet() ?: emptySet()) }
+    var savedArticles by remember { mutableStateOf(readSavedArticles(preferences.getString("saved_articles", "[]") ?: "[]")) }
     var searchText by remember { mutableStateOf("") }
     var cardLayout by remember { mutableStateOf(preferences.getString("layout", "cards") ?: "cards") }
-    val visibleArticles = articles.filter { article ->
+    val sourceArticles = if (savedOnly) savedArticles else articles
+    val visibleArticles = sourceArticles.filter { article ->
         (!savedOnly || (article.link.ifBlank { article.title }) in favorites) &&
         (selectedCategory == "Toutes" || article.category == selectedCategory) &&
         (selectedRegion == "Toutes" || article.region == selectedRegion || article.region == "Monde") &&
@@ -264,7 +266,8 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, saved
                                 IconButton(onClick = {
                                     val key = article.link.ifBlank { article.title }
                                     favorites = if (key in favorites) favorites - key else favorites + key
-                                    preferences.edit().putStringSet("favorites", favorites).apply()
+                                    savedArticles = if (key in favorites) savedArticles.filterNot { it.link.ifBlank { it.title } == key } else savedArticles.filterNot { it.link.ifBlank { it.title } == key } + article
+                                    preferences.edit().putStringSet("favorites", favorites).putString("saved_articles", writeSavedArticles(savedArticles)).apply()
                                 }) {
                                     Icon(
                                         if ((article.link.ifBlank { article.title }) in favorites)
@@ -319,6 +322,9 @@ private fun LeafSwipeScreen() {
   }
  }
 }
+private fun readSavedArticles(raw: String): List<LiveArticle> = runCatching { val a = JSONArray(raw); (0 until a.length()).mapNotNull { i -> val x = a.optJSONObject(i) ?: return@mapNotNull null; LiveArticle(x.optString("title"), x.optString("summary"), x.optString("link"), x.optString("published"), x.optString("source"), x.optString("category"), x.optString("region"), x.optString("imageUrl").takeIf { it.isNotBlank() }) } }.getOrDefault(emptyList())
+private fun writeSavedArticles(items: List<LiveArticle>): String = JSONArray().apply { items.forEach { a -> put(JSONObject().apply { put("title", a.title); put("summary", a.summary); put("link", a.link); put("published", a.published); put("source", a.source); put("category", a.category); put("region", a.region); put("imageUrl", a.imageUrl ?: "") }) } }.toString()
+
 @Composable
 private fun Explorer(categories: List<String>, regions: List<String>,
     onCategory: (String) -> Unit, onRegion: (String) -> Unit) {
