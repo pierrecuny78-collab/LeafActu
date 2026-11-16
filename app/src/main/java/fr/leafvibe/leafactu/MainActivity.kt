@@ -1,6 +1,7 @@
 package fr.leafvibe.leafactu
 
 import android.os.Bundle
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
@@ -52,9 +53,17 @@ private val demoNews = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LeafActuApp() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val preferences = remember {
+        context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE)
+    }
     var tab by remember { mutableStateOf("Accueil") }
-    var category by remember { mutableStateOf("Toutes") }
-    var region by remember { mutableStateOf("Toutes") }
+    var category by remember {
+        mutableStateOf(preferences.getString("category", "Toutes") ?: "Toutes")
+    }
+    var region by remember {
+        mutableStateOf(preferences.getString("region", "Toutes") ?: "Toutes")
+    }
     var settings by remember { mutableStateOf(false) }
     val categories = listOf("Toutes", "Politique", "Monde", "Technologie", "Sciences", "Sport",
         "Économie", "Environnement", "Culture", "Histoire")
@@ -87,10 +96,13 @@ fun LeafActuApp() {
             Column(Modifier.padding(padding).fillMaxSize()) {
                 if (settings) {
                     Personalization(categories, regions, category, region,
-                        { category = it }, { region = it }, { settings = false })
+                        { category = it; preferences.edit().putString("category", it).apply() },
+                        { region = it; preferences.edit().putString("region", it).apply() },
+                        { settings = false })
                 } else if (tab == "Explorer") {
-                    Explorer(categories, regions, { category = it; tab = "Accueil" },
-                        { region = it; tab = "Accueil" })
+                    Explorer(categories, regions,
+                        { category = it; preferences.edit().putString("category", it).apply(); tab = "Accueil" },
+                        { region = it; preferences.edit().putString("region", it).apply(); tab = "Accueil" })
                 } else {
                     val period = when (tab) {
                         "Passé" -> Period.PAST
@@ -257,7 +269,7 @@ private fun Personalization(categories: List<String>, regions: List<String>, cat
                 RadioButton(region == value, onClick = { onRegion(value) }); Text(value)
             }
         }
-        Text("Les choix ne sont pas encore sauvegardés durablement dans cette version prototype.",
+        Text("Tes préférences sont enregistrées sur cet appareil.",
             fontSize = 12.sp, color = LeafBrown, modifier = Modifier.padding(top = 10.dp))
     }
 }
