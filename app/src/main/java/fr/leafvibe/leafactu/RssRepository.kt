@@ -12,7 +12,8 @@ data class LiveArticle(
     val summary: String,
     val link: String,
     val published: String,
-    val source: String
+    val source: String,
+    val category: String
 )
 
 object RssRepository {
@@ -30,6 +31,20 @@ object RssRepository {
         }.distinctBy { it.link.ifBlank { it.title } }
             .sortedByDescending { it.published }
             .take(60)
+    }
+
+    private fun classifyCategory(title: String, summary: String): String {
+        val text = "$title $summary".lowercase()
+        val rules = listOf(
+            "Sport" to listOf("football", "sport", "match", "championnat", "olympique", "tennis", "rugby"),
+            "Technologie" to listOf("technologie", "numérique", "intelligence artificielle", "logiciel", "cyber", "smartphone", "robot"),
+            "Sciences" to listOf("science", "recherche", "scientifique", "espace", "nasa", "astronomie", "médecine"),
+            "Économie" to listOf("économie", "entreprise", "bourse", "marché", "inflation", "emploi", "budget"),
+            "Environnement" to listOf("climat", "environnement", "écologie", "pollution", "biodiversité", "énergie"),
+            "Culture" to listOf("culture", "cinéma", "musique", "festival", "livre", "exposition", "art"),
+            "Politique" to listOf("gouvernement", "président", "élection", "parlement", "ministre", "politique", "diplomatie")
+        )
+        return rules.firstOrNull { (_, keywords) -> keywords.any(text::contains) }?.first ?: "Monde"
     }
 
     private fun parseFeed(source: FeedSource): List<LiveArticle> {
@@ -82,7 +97,8 @@ object RssRepository {
                                         summary = summary.replace(Regex("<[^>]*>"), " ").take(420),
                                         link = link,
                                         published = published,
-                                        source = source.name
+                                        source = source.name,
+                                        category = classifyCategory(title, summary)
                                     ))
                                 }
                                 inEntry = false
