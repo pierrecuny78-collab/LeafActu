@@ -18,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,11 +82,12 @@ fun LeafActuApp() {
                 Icon(Icons.Default.Tune, contentDescription = "Personnaliser")
             } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Page)) },
             bottomBar = { NavigationBar(containerColor = Color.White) {
-                listOf("Accueil", "Passé", "Présent", "Futur", "Explorer").forEach { name ->
+                listOf("Accueil", "Passé", "Présent", "Futur", "Enregistrés", "Explorer").forEach { name ->
                     val icon = when (name) {
                         "Passé" -> Icons.Default.History
                         "Présent" -> Icons.Default.Feed
                         "Futur" -> Icons.Default.Event
+                        "Enregistrés" -> Icons.Default.Bookmarks
                         "Explorer" -> Icons.Default.Explore
                         else -> Icons.Default.Home
                     }
@@ -110,7 +113,7 @@ fun LeafActuApp() {
                         "Présent" -> Period.NOW
                         else -> null
                     }
-                    if (period == Period.NOW || period == null) LiveNewsFeed(category, region) else Feed(period, category, region)
+                    if (period == Period.NOW || period == null || tab == "Enregistrés") LiveNewsFeed(category, region, savedOnly = tab == "Enregistrés") else Feed(period, category, region)
                 }
             }
         }
@@ -163,13 +166,15 @@ private fun Feed(period: Period?, category: String, region: String) {
 
 
 @Composable
-private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String) {
+private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, savedOnly: Boolean = false) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
     val preferences = remember { context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE) }
     var favorites by remember { mutableStateOf(preferences.getStringSet("favorites", emptySet())?.toSet() ?: emptySet()) }
     var searchText by remember { mutableStateOf("") }
-    val visibleArticles = articles.filter {
+    var cardLayout by remember { mutableStateOf(preferences.getString("layout", "cards") ?: "cards") }
+    val visibleArticles = articles.filter { article ->
+        (!savedOnly || (article.link.ifBlank { article.title }) in favorites) &&
         (selectedCategory == "Toutes" || it.category == selectedCategory) &&
         (selectedRegion == "Toutes" || it.region == selectedRegion || it.region == "Monde") &&
         (searchText.isBlank() || it.title.contains(searchText, true) || it.summary.contains(searchText, true))
@@ -188,12 +193,19 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String) {
             Column(Modifier.weight(1f)) {
                 Text("L'actualité en direct", fontSize = 23.sp, fontWeight = FontWeight.Bold,
                     color = LeafGreen, modifier = Modifier.padding(top = 12.dp))
-                Text("Flux RSS • ${visibleArticles.size} articles • Région : $selectedRegion",
+                Text(if (savedOnly) "Articles enregistrés" else "Flux RSS • ${visibleArticles.size} articles • Région : $selectedRegion",
                     color = LeafBrown, fontSize = 12.sp)
             }
             IconButton(onClick = { refreshKey++ }, enabled = !loading) {
                 Icon(Icons.Default.Refresh, contentDescription = "Actualiser", tint = LeafGreen)
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Text("Affichage", color = LeafBrown, fontSize = 12.sp)
+            Spacer(Modifier.width(8.dp))
+            FilterChip(selected = cardLayout == "cards", onClick = { cardLayout = "cards"; preferences.edit().putString("layout", "cards").apply() }, label = { Text("Cartes") })
+            Spacer(Modifier.width(6.dp))
+            FilterChip(selected = cardLayout == "list", onClick = { cardLayout = "list"; preferences.edit().putString("layout", "list").apply() }, label = { Text("Liste") })
         }
         OutlinedTextField(
             value = searchText,
@@ -208,12 +220,13 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String) {
                 CircularProgressIndicator(color = LeafGreen)
             }
             articles.isEmpty() -> Column(Modifier.padding(top = 24.dp)) {
-                Text("Aucun article récupéré pour le moment.", fontWeight = FontWeight.Bold)
-                Text("Vérifie ta connexion Internet ou réessaie plus tard. Certains flux peuvent être indisponibles.",
+                Text(if (savedOnly) "Aucun article enregistré." else "Aucun article récupéré pour le moment.", fontWeight = FontWeight.Bold)
+                Text(if (savedOnly) "Enregistre un article avec le marque-page pour le retrouver ici." else "Vérifie ta connexion Internet ou réessaie plus tard. Certains flux peuvent être indisponibles.",
                     color = LeafBrown, fontSize = 13.sp)
                 TextButton(onClick = { refreshKey++ }) { Text("Réessayer") }
             }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                item { Text("${visibleArticles.size} article(s) affiché(s)", color = LeafBrown, fontSize = 11.sp) }
                 items(visibleArticles) { article ->
                     Card(Modifier.fillMaxWidth().clickable {
                         if (article.link.startsWith("https://") || article.link.startsWith("http://")) {
@@ -221,7 +234,18 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String) {
                         }
                     }, shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                        Column(Modifier.padding(14.dp)) {
+                        Column(Modifier.padding(if (cardLayout == "cards") 0.dp else 12.dp)) {
+                            if (cardLayout == "cards") {
+                                if (!article.imageUrl.isNullOrBlank()) {
+                                    AsyncImage(model = article.imageUrl, contentDescription = "Image : ${article.title}", modifier = Modifier.fillMaxWidth().height(190.dp), contentScale = ContentScale.Crop)
+                                } else {
+                                    Box(Modifier.fillMaxWidth().height(112.dp), contentAlignment = Alignment.Center) {
+                                        Surface(color = LeafCream.copy(alpha = .35f), modifier = Modifier.fillMaxSize()) {}
+                                        Text("🍃 LeafActu", color = LeafGreen, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                            Column(Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(article.category.uppercase(), color = LeafGreen,
                                     fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -250,6 +274,7 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String) {
                             Spacer(Modifier.height(8.dp))
                             Text(article.published.ifBlank { "Date non précisée" },
                                 color = LeafBrown, fontSize = 11.sp)
+                            }
                         }
                     }
                 }
