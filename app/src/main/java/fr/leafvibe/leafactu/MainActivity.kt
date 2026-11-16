@@ -1,6 +1,8 @@
 package fr.leafvibe.leafactu
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -96,7 +98,7 @@ fun LeafActuApp() {
                         "Présent" -> Period.NOW
                         else -> null
                     }
-                    Feed(period, category, region)
+                    if (period == Period.NOW || period == null) LiveNewsFeed() else Feed(period, category, region)
                 }
             }
         }
@@ -143,6 +145,70 @@ private fun Feed(period: Period?, category: String, region: String) {
             }
             item { Text("Démonstration : ces cartes ne sont pas des actualités en direct. Les sources réelles seront connectées ensuite.",
                 color = LeafBrown, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp)) }
+        }
+    }
+}
+
+
+@Composable
+private fun LiveNewsFeed() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(refreshKey) {
+        loading = true
+        articles = RssRepository.loadLatest()
+        loading = false
+    }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("L'actualité en direct", fontSize = 23.sp, fontWeight = FontWeight.Bold,
+                    color = LeafGreen, modifier = Modifier.padding(top = 12.dp))
+                Text("Flux RSS publics • ${articles.size} articles chargés",
+                    color = LeafBrown, fontSize = 12.sp)
+            }
+            IconButton(onClick = { refreshKey++ }, enabled = !loading) {
+                Icon(Icons.Default.Refresh, contentDescription = "Actualiser", tint = LeafGreen)
+            }
+        }
+        when {
+            loading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = LeafGreen)
+            }
+            articles.isEmpty() -> Column(Modifier.padding(top = 24.dp)) {
+                Text("Aucun article récupéré pour le moment.", fontWeight = FontWeight.Bold)
+                Text("Vérifie ta connexion Internet ou réessaie plus tard. Certains flux peuvent être indisponibles.",
+                    color = LeafBrown, fontSize = 13.sp)
+                TextButton(onClick = { refreshKey++ }) { Text("Réessayer") }
+            }
+            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(articles) { article ->
+                    Card(Modifier.fillMaxWidth().clickable {
+                        if (article.link.startsWith("https://") || article.link.startsWith("http://")) {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.link)))
+                        }
+                    }, shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(article.source.uppercase(), color = LeafGreen,
+                                fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(5.dp))
+                            Text(article.title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                            if (article.summary.isNotBlank()) {
+                                Spacer(Modifier.height(5.dp))
+                                Text(article.summary, color = Color(0xFF5F665F), fontSize = 13.sp)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text(article.published.ifBlank { "Date non précisée" },
+                                color = LeafBrown, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
         }
     }
 }
