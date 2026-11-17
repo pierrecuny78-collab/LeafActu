@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
@@ -73,8 +75,7 @@ fun LeafActuApp() {
         mutableStateOf(preferences.getString("region", "Toutes") ?: "Toutes")
     }
     var settings by remember { mutableStateOf(false) }
-    val categories = listOf("Toutes", "Politique", "Monde", "Technologie", "Sciences", "Sport",
-        "Économie", "Environnement", "Culture", "Histoire")
+    val categories = listOf("Toutes", "Politique", "Monde", "Technologie", "Sciences", "Sport", "Économie", "Environnement", "Culture", "Histoire", "Santé", "Éducation", "International", "Local", "Justice", "Météo", "Espace", "Automobile", "Jeux vidéo", "Lifestyle", "Bonnes nouvelles")
     val regions = listOf("Toutes", "France", "Alsace", "Europe", "Allemagne", "Japon", "Monde")
     MaterialTheme(colorScheme = lightColorScheme(primary = LeafGreen, secondary = LeafGold,
         tertiary = LeafBrown, background = Page, surface = Color.White)) {
@@ -87,7 +88,7 @@ fun LeafActuApp() {
             }, actions = { IconButton(onClick = { settings = true }) {
                 Icon(Icons.Default.Tune, contentDescription = "Personnaliser")
             } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Page)) },
-            bottomBar = { NavigationBar(containerColor = Color.White) {
+            bottomBar = { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 listOf("Accueil", "Passé", "Présent", "Futur", "LeafSwipe", "Enregistrés", "Explorer").forEach { name ->
                     val icon = when (name) {
                         "Passé" -> Icons.Default.History
@@ -98,8 +99,7 @@ fun LeafActuApp() {
                         "Explorer" -> Icons.Default.Explore
                         else -> Icons.Default.Home
                     }
-                    NavigationBarItem(selected = tab == name, onClick = { tab = name },
-                        icon = { Icon(icon, contentDescription = name) }, label = { Text(name) })
+                    NavigationBarItem(selected = tab == name, onClick = { tab = name }, modifier = Modifier.width(76.dp), icon = { Icon(icon, contentDescription = name) }, label = { Text(name, fontSize = 9.sp, maxLines = 1, softWrap = false) })
                 }
             } }, containerColor = Page
         ) { padding ->
