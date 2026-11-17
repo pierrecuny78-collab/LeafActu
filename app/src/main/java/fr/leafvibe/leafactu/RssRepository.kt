@@ -42,7 +42,24 @@ object RssRepository {
         FeedSource("Futura", "https://www.futura-sciences.com/rss/actualites.xml"),
         FeedSource("NASA", "https://www.nasa.gov/news-release/feed/"),
         FeedSource("ScienceDaily", "https://www.sciencedaily.com/rss/all.xml"),
-        FeedSource("ESPN", "https://www.espn.com/espn/rss/news")
+        FeedSource("ESPN", "https://www.espn.com/espn/rss/news"),
+        FeedSource("AP News", "https://apnews.com/apf-topnews?output=rss"),
+        FeedSource("NPR", "https://feeds.npr.org/1001/rss.xml"),
+        FeedSource("DW Français", "https://rss.dw.com/rdf/rss-fr-all"),
+        FeedSource("RTBF", "https://rss.rtbf.be/article/rss/rtbfinfo/info"),
+        FeedSource("La Croix", "https://www.la-croix.com/RSS/UNIVERSAL"),
+        FeedSource("France Culture", "https://www.radiofrance.fr/franceculture/rss"),
+        FeedSource("Vie publique", "https://www.vie-publique.fr/rss.xml"),
+        FeedSource("CNRS", "https://www.cnrs.fr/fr/rss.xml"),
+        FeedSource("ESA", "https://www.esa.int/rssfeed/Our_Activities"),
+        FeedSource("The Verge", "https://www.theverge.com/rss/index.xml"),
+        FeedSource("Ars Technica", "https://feeds.arstechnica.com/arstechnica/index"),
+        FeedSource("IGN", "https://feeds.feedburner.com/ign/all"),
+        FeedSource("UN News", "https://news.un.org/feed/subscribe/fr/news/all/rss.xml"),
+        FeedSource("UNICEF", "https://www.unicef.org/press-releases/rss.xml"),
+        FeedSource("WHO", "https://www.who.int/rss-feeds/news-english.xml"),
+        FeedSource("Good News Network", "https://www.goodnewsnetwork.org/feed/"),
+        FeedSource("Positive News", "https://www.positive.news/feed/")
     )
 
     suspend fun loadLatest(): List<LiveArticle> = withContext(Dispatchers.IO) {
@@ -56,7 +73,6 @@ object RssRepository {
             }.awaitAll().flatten()
         }.distinctBy { it.link.ifBlank { it.title } }
             .sortedByDescending { it.published }
-            .take(100)
     }
 
     private fun extractImage(html: String): String? {
