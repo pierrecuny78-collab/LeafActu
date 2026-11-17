@@ -297,30 +297,78 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, saved
 
 @Composable
 private fun LeafSwipeScreen() {
- val context = androidx.compose.ui.platform.LocalContext.current
- var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
- var loading by remember { mutableStateOf(true) }; var refresh by remember { mutableIntStateOf(0) }
- var index by remember { mutableIntStateOf(0) }; var drag by remember { mutableFloatStateOf(0f) }
- var mode by remember { mutableStateOf("Actualités") }
- val modes = listOf("Actualités", "Le saviez-vous", "Motivation", "Défi du jour")
- val prompts = listOf("Prends cinq minutes pour découvrir un sujet que tu ne connais pas.", "Note une information importante et vérifie-la auprès de deux sources.", "Partage une bonne nouvelle avec quelqu’un aujourd’hui.", "Découvre une initiative locale près de chez toi.", "Apprends une notion nouvelle et explique-la avec tes mots.")
- LaunchedEffect(refresh) { loading = true; articles = runCatching { RssRepository.loadLatest() }.getOrDefault(emptyList()); index = 0; loading = false }
- val count = if (mode == "Actualités") articles.size else prompts.size
- val safe = if (count == 0) 0 else index.coerceIn(0, count - 1); val article = articles.getOrNull(safe)
- Column(Modifier.fillMaxSize().padding(16.dp)) {
-  Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("LeafSwipe", fontSize = 25.sp, fontWeight = FontWeight.Bold, color = LeafGreen); Text("Découvre, apprends et passe à l’action", fontSize = 12.sp, color = LeafBrown) }; IconButton(onClick = { refresh++ }, enabled = !loading) { Icon(Icons.Default.Refresh, contentDescription = "Actualiser", tint = LeafGreen) } }
-  Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { modes.forEach { m -> FilterChip(selected = mode == m, onClick = { mode = m; index = 0 }, label = { Text(m, fontSize = 10.sp) }) } }
-  if (loading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = LeafGreen) }
-  else if (count == 0) Text("Aucune actualité disponible. Actualise pour réessayer.")
-  else {
-   Card(Modifier.fillMaxWidth().weight(1f).pointerInput(mode, index) { detectHorizontalDragGestures(onDragEnd = { if (drag < -65f) index = (index + 1).coerceAtMost(count - 1); if (drag > 65f) index = (index - 1).coerceAtLeast(0); drag = 0f }, onHorizontalDrag = { _, delta -> drag += delta }) }, shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-    if (mode == "Actualités" && article != null) { Column(Modifier.fillMaxSize()) { if (!article.imageUrl.isNullOrBlank()) AsyncImage(model = article.imageUrl, contentDescription = article.title, modifier = Modifier.fillMaxWidth().height(220.dp), contentScale = ContentScale.Crop); Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(article.category + " • " + article.source, color = LeafGreen, fontSize = 12.sp); Text(article.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(article.summary, color = LeafBrown, fontSize = 14.sp); Text(article.region + " • " + article.published, color = LeafBrown, fontSize = 11.sp); OutlinedButton(onClick = { val p = context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE); val key = article.link.ifBlank { article.title }; val keys = p.getStringSet("favorites", emptySet())?.toMutableSet() ?: mutableSetOf(); keys.add(key); val saved = readSavedArticles(p.getString("saved_articles", "[]") ?: "[]").filterNot { it.link.ifBlank { it.title } == key } + article; p.edit().putStringSet("favorites", keys).putString("saved_articles", writeSavedArticles(saved)).apply() }) { Text("Garder") }; Button(onClick = { if (article.link.startsWith("http")) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.link))) }) { Text("Lire l’article") } } }
-    } else { Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { Text(if (mode == "Le saviez-vous") "💡" else if (mode == "Motivation") "🌱" else "🎯", fontSize = 52.sp); Text(mode, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = LeafGreen); Text(prompts[safe], fontSize = 19.sp, color = LeafBrown) } }
-   }
-   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = { index = (index - 1).coerceAtLeast(0) }, enabled = index > 0) { Text("← Précédent") }; Text((safe + 1).toString() + " / " + count, color = LeafBrown); TextButton(onClick = { index = (index + 1).coerceAtMost(count - 1) }, enabled = index < count - 1) { Text("Suivant →") } }
-   Text("Balaye la carte vers la gauche ou la droite pour changer.", color = LeafBrown, fontSize = 11.sp)
-  }
- }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE) }
+    var mode by remember { mutableStateOf("Actualités") }
+    var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var refresh by remember { mutableIntStateOf(0) }
+    val prompts = remember {
+        mapOf(
+            "Le saviez-vous" to listOf("Les pieuvres possèdent trois cœurs.", "Une journée sur Vénus dure plus longtemps qu'une année sur Vénus.", "Le phytoplancton océanique produit une grande partie de l'oxygène terrestre.", "Les koalas ont des empreintes digitales très proches de celles des humains.", "Le miel correctement conservé peut rester stable pendant très longtemps."),
+            "Motivation" to listOf("Un petit progrès régulier vaut mieux qu'un grand projet jamais commencé.", "La curiosité transforme chaque journée en occasion d'apprendre.", "Célèbre une chose que tu as terminée aujourd'hui.", "Tu peux ajuster ton objectif et avancer à ton rythme.", "Une bonne question est le début d'une découverte."),
+            "Défi du jour" to listOf("Découvre une actualité locale et vérifie-la auprès de deux sources.", "Apprends cinq mots dans une langue étrangère.", "Fais une promenade et observe trois détails nouveaux.", "Explique à quelqu'un une information apprise aujourd'hui.", "Repère une initiative écologique près de chez toi.")
+        )
+    }
+    LaunchedEffect(refresh) {
+        loading = true
+        val fresh = runCatching { RssRepository.loadLatest() }.getOrDefault(emptyList())
+        val old = readSavedArticles(prefs.getString("news_cache", "[]") ?: "[]")
+        articles = (fresh + old).distinctBy { it.link.ifBlank { it.title } }.sortedByDescending { it.published }
+        prefs.edit().putString("news_cache", writeSavedArticles(articles)).apply()
+        loading = false
+    }
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) { Text("LeafSwipe", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = LeafGreen); Text("Découvre, apprends et passe à l’action", fontSize = 12.sp, color = LeafBrown) }
+            IconButton(onClick = { refresh++ }, enabled = !loading) { Icon(Icons.Default.Refresh, contentDescription = "Actualiser", tint = LeafGreen) }
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Actualités", "Le saviez-vous", "Motivation", "Défi du jour").forEach { item -> FilterChip(selected = mode == item, onClick = { mode = item }, label = { Text(item, maxLines = 1) }) }
+        }
+        if (loading) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = LeafGreen) } }
+        else if (mode == "Actualités" && articles.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Aucune actualité récupérée. Réessaie.", color = LeafBrown) } }
+        else {
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 14.dp), contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (mode == "Actualités") {
+                    items(articles, key = { it.link.ifBlank { it.title } }) { article ->
+                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                            Column {
+                                if (!article.imageUrl.isNullOrBlank()) AsyncImage(model = article.imageUrl, contentDescription = article.title, modifier = Modifier.fillMaxWidth().height(190.dp), contentScale = ContentScale.Crop)
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(article.category + " • " + article.source, color = LeafGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(article.title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                    Text(article.summary, color = LeafBrown, fontSize = 13.sp)
+                                    Text(article.region + " • " + article.published, color = LeafBrown, fontSize = 11.sp)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = {
+                                            val key = article.link.ifBlank { article.title }
+                                            val keys = prefs.getStringSet("favorites", emptySet())?.toMutableSet() ?: mutableSetOf()
+                                            keys.add(key)
+                                            val saved = readSavedArticles(prefs.getString("saved_articles", "[]") ?: "[]").filterNot { it.link.ifBlank { it.title } == key } + article
+                                            prefs.edit().putStringSet("favorites", keys).putString("saved_articles", writeSavedArticles(saved)).apply()
+                                            android.widget.Toast.makeText(context, "Article enregistré", android.widget.Toast.LENGTH_SHORT).show()
+                                        }) { Icon(Icons.Default.BookmarkAdd, null); Text("Enregistrer") }
+                                        Button(onClick = { if (article.link.startsWith("http")) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.link))) }) { Text("Lire") }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(prompts[mode].orEmpty()) { prompt ->
+                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(if (mode == "Le saviez-vous") "💡" else if (mode == "Motivation") "🌱" else "🎯", fontSize = 36.sp)
+                                Text(mode, color = LeafGreen, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(prompt, color = LeafBrown, fontSize = 16.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 private fun readSavedArticles(raw: String): List<LiveArticle> = runCatching { val a = JSONArray(raw); (0 until a.length()).mapNotNull { i -> val x = a.optJSONObject(i) ?: return@mapNotNull null; LiveArticle(x.optString("title"), x.optString("summary"), x.optString("link"), x.optString("published"), x.optString("source"), x.optString("category"), x.optString("region"), x.optString("imageUrl").takeIf { it.isNotBlank() }) } }.getOrDefault(emptyList())
 private fun writeSavedArticles(items: List<LiveArticle>): String = JSONArray().apply { items.forEach { a -> put(JSONObject().apply { put("title", a.title); put("summary", a.summary); put("link", a.link); put("published", a.published); put("source", a.source); put("category", a.category); put("region", a.region); put("imageUrl", a.imageUrl ?: "") }) } }.toString()
