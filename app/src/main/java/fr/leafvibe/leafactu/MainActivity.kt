@@ -74,6 +74,7 @@ fun LeafActuApp() {
     var region by remember {
         mutableStateOf(preferences.getString("region", "Toutes") ?: "Toutes")
     }
+    var language by remember { mutableStateOf(preferences.getString("language", "Français") ?: "Français") }
     var settings by remember { mutableStateOf(false) }
     val categories = listOf("Toutes", "Politique", "Monde", "Technologie", "Sciences", "Sport", "Économie", "Environnement", "Culture", "Histoire", "Santé", "Éducation", "International", "Local", "Justice", "Météo", "Espace", "Automobile", "Jeux vidéo", "Lifestyle", "Bonnes nouvelles")
     val regions = listOf("Toutes", "France", "Alsace", "Europe", "Allemagne", "Japon", "Monde")
@@ -105,9 +106,10 @@ fun LeafActuApp() {
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
                 if (settings) {
-                    Personalization(categories, regions, category, region,
+                    Personalization(categories, regions, category, region, language,
                         { category = it; preferences.edit().putString("category", it).apply() },
                         { region = it; preferences.edit().putString("region", it).apply() },
+                        { language = it; preferences.edit().putString("language", it).apply() },
                         { settings = false })
                 } else if (tab == "LeafSwipe") {
                     LeafSwipeScreen()
@@ -399,12 +401,23 @@ private fun Explorer(categories: List<String>, regions: List<String>,
 
 @Composable
 private fun Personalization(categories: List<String>, regions: List<String>, category: String,
-    region: String, onCategory: (String) -> Unit, onRegion: (String) -> Unit, close: () -> Unit) {
+    region: String, language: String, onCategory: (String) -> Unit, onRegion: (String) -> Unit,
+    onLanguage: (String) -> Unit, close: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Personnalisation", fontSize = 23.sp, fontWeight = FontWeight.Bold,
                 color = LeafGreen, modifier = Modifier.weight(1f))
             TextButton(onClick = close) { Text("Terminé") }
+        }
+        Text("Langue de l’application", color = LeafBrown)
+        var languageMenu by remember { mutableStateOf(false) }
+        Box {
+            OutlinedButton(onClick = { languageMenu = true }) { Text(language); Icon(Icons.Default.ArrowDropDown, null) }
+            DropdownMenu(expanded = languageMenu, onDismissRequest = { languageMenu = false }) {
+                listOf("Français", "English", "Deutsch", "Español", "Italiano").forEach { choice ->
+                    DropdownMenuItem(text = { Text(choice) }, onClick = { onLanguage(choice); languageMenu = false })
+                }
+            }
         }
         Text("Catégorie suivie", color = LeafBrown)
         categories.forEach { value ->
