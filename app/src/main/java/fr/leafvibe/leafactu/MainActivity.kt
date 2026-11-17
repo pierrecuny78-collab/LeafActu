@@ -177,7 +177,7 @@ private fun Feed(period: Period?, category: String, region: String) {
 @Composable
 private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, savedOnly: Boolean = false) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var articles by remember { mutableStateOf<List<LiveArticle>>(emptyList()) }
+    var articles by remember { mutableStateOf(readSavedArticles(preferences.getString("news_cache", "[]") ?: "[]")) }
     val preferences = remember { context.getSharedPreferences("leafactu_preferences", Context.MODE_PRIVATE) }
     var favorites by remember { mutableStateOf(preferences.getStringSet("favorites", emptySet())?.toSet() ?: emptySet()) }
     var savedArticles by remember { mutableStateOf(readSavedArticles(preferences.getString("saved_articles", "[]") ?: "[]")) }
@@ -195,7 +195,11 @@ private fun LiveNewsFeed(selectedCategory: String, selectedRegion: String, saved
 
     LaunchedEffect(refreshKey) {
         loading = true
-        articles = RssRepository.loadLatest()
+        val fresh = RssRepository.loadLatest()
+        articles = (fresh + readSavedArticles(preferences.getString("news_cache", "[]") ?: "[]"))
+            .distinctBy { it.link.ifBlank { it.title } }
+            .sortedByDescending { it.published }
+        preferences.edit().putString("news_cache", writeSavedArticles(articles)).apply()
         loading = false
     }
 
